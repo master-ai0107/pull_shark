@@ -1,0 +1,48 @@
+name: Pull Shark Speedrun
+
+on:
+  workflow_dispatch: # Allows you to trigger this manually
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run PR Automation Loop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Configure Git credentials using your profile data
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor }}@://github.com"
+          
+          # Target is 1024 total merges. Running in safe batches of 50-100 per run is optimal.
+          for i in {1..100}
+          do
+            BRANCH_NAME="shark-run-$i-$(date +%s)"
+            
+            # 1. Create and switch to a temporary feature branch
+            git checkout -b $BRANCH_NAME
+            
+            # 2. Make a unique modification
+            echo "Merge increment $i" >> progress.txt
+            git add progress.txt
+            git commit -m "feat: adding profile badge progress $i"
+            
+            # 3. Push branch to your repository
+            git push origin $BRANCH_NAME
+            
+            # 4. Open a Pull Request into the default main branch
+            pr_url=$(gh pr create --title "Pull Shark Loop $i" --body "Automated batch PR" --base main --head $BRANCH_NAME)
+            
+            # 5. Instantly merge the PR into the default main branch
+            gh pr merge $pr_url --merge --delete-branch
+            
+            # 6. Return back to main and pull updates before the next loop iteration
+            git checkout main
+            git pull origin main
+          done
